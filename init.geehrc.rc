@@ -14,37 +14,31 @@
 # limitations under the License.
 #
 
-import init.geehrc.usb.rc
-import init.geehrc_svelte.rc
-import init.geehrc_tiny.rc
+import init.mako.usb.rc
+import init.mako_svelte.rc
+import init.mako_tiny.rc
 
 on early-init
     mount debugfs debugfs /sys/kernel/debug
     chown system system /sys/kernel/debug/kgsl/proc
 
 on init
+
     # Set permissions for persist partition
     mkdir /persist 0771 system system
     mkdir /firmware 0771 system system
 
-    # Support legacy paths
-    symlink /sdcard /mnt/sdcard
-    symlink /sdcard /storage/sdcard0
-
-    # Setup custom emergency number list based on
     # the MCC. This is needed by RIL.
     setprop persist.radio.custom_ecc "1"
     setprop persist.radio.custom_ecc_mcc "{234,235,424,426,427,430,431:999},{334:060,066},{422:9999},{730:133}"
     setprop persist.radio.custom_ecc_mcc_ex "{450:111,112,113,119,122,125,127},{724:190},{425:100,101,102}"
     setprop persist.radio.custom_ecc_voice "{515:117},{452:113,114,115}"
     setprop persist.radio.custom_ecc_hard "911,*911,#911,112,999,000,08,118,120,122,110,119,995,111,113,125,127,133"
-
-on charger-fs
-    mount ext4 /dev/block/platform/msm_sdcc.1/by-name/system  /system ro barrier=1
-    start rmt_storage
+    symlink /sdcard /mnt/sdcard
+    symlink /sdcard /storage/sdcard0
 
 on fs
-    mount_all ./fstab.geehrc
+    mount_all ./fstab.mako
     restorecon_recursive /persist
 
 on early-boot
@@ -62,10 +56,11 @@ on boot
     mkdir /dev/socket/qmux_gps 0770 gps gps
     chmod 2770 /dev/socket/qmux_gps
 
-    chmod 666 /proc/cmdline
-
     # Allow QMUX daemon to assign port open wait time
     chown radio radio /sys/devices/virtual/hsicctl/hsicctl0/modem_wait
+
+    #Remove SUID bit for iproute2 ip tool
+    chmod 0755 /system/bin/ip
 
     #port-bridge
     chmod 0660 /dev/smd0
@@ -134,6 +129,8 @@ on boot
 on post-fs-data
     write /sys/kernel/boot_adsp/boot 1
 
+    mkdir /data/media 0770 media_rw media_rw
+
 # to observe dnsmasq.leases file for dhcp information of soft ap.
     chown dhcp system /data/misc/dhcp
 
@@ -165,7 +162,6 @@ on post-fs-data
     mkdir /data/system/sensors
     chmod 665 /data/system/sensors
     write /data/system/sensors/settings 1
-    restorecon /data/system/sensors/settings
     chmod 660 /data/system/sensors/settings
 
     # AKM setting data
@@ -191,15 +187,7 @@ on post-fs-data
     rm /data/local/tmp/adreno_config.txt
 
     # LED On/Off synchronization
-    chown system system /sys/class/leds/led:red/device/lock
-
-    chmod 644 /sys/class/leds/button-backlight/brightness
-    chmod 644 /sys/class/leds/led:red/brightness
-    chmod 644 /sys/class/leds/led:green/brightness
-
-    chown system system /sys/class/leds/button-backlight/brightness
-    chown system system /sys/class/leds/led:red/brightness
-    chown system system /sys/class/leds/led:green/brightness
+    chown system system /sys/class/leds/red/device/lock
 
     # communicate with mpdecision and thermald
     mkdir /dev/socket/mpdecision 2770 root system
@@ -212,70 +200,28 @@ on post-fs-data
     write /sys/module/rpm_resources/enable_low_power/pxo 1
     write /sys/module/rpm_resources/enable_low_power/vdd_dig 1
     write /sys/module/rpm_resources/enable_low_power/vdd_mem 1
-    write /sys/module/pm_8x60/modes/cpu0/retention/idle_enabled 0
-    write /sys/module/pm_8x60/modes/cpu1/retention/idle_enabled 1
-    write /sys/module/pm_8x60/modes/cpu2/retention/idle_enabled 1
-    write /sys/module/pm_8x60/modes/cpu3/retention/idle_enabled 1
     write /sys/module/pm_8x60/modes/cpu0/power_collapse/suspend_enabled 1
     write /sys/module/pm_8x60/modes/cpu1/power_collapse/suspend_enabled 1
     write /sys/module/pm_8x60/modes/cpu2/power_collapse/suspend_enabled 1
     write /sys/module/pm_8x60/modes/cpu3/power_collapse/suspend_enabled 1
-    write /sys/module/pm_8x60/modes/cpu0/standalone_power_collapse/suspend_enabled 1
-    write /sys/module/pm_8x60/modes/cpu1/standalone_power_collapse/suspend_enabled 1
-    write /sys/module/pm_8x60/modes/cpu2/standalone_power_collapse/suspend_enabled 1
-    write /sys/module/pm_8x60/modes/cpu3/standalone_power_collapse/suspend_enabled 1
-    write /sys/module/pm_8x60/modes/cpu0/standalone_power_collapse/idle_enabled 1
-    write /sys/module/pm_8x60/modes/cpu1/standalone_power_collapse/idle_enabled 1
-    write /sys/module/pm_8x60/modes/cpu2/standalone_power_collapse/idle_enabled 1
-    write /sys/module/pm_8x60/modes/cpu3/standalone_power_collapse/idle_enabled 1
     write /sys/module/pm_8x60/modes/cpu0/power_collapse/idle_enabled 1
-    write /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor "interactive"
-    write /sys/devices/system/cpu/cpu1/cpufreq/scaling_governor "interactive"
-    write /sys/devices/system/cpu/cpu2/cpufreq/scaling_governor "interactive"
-    write /sys/devices/system/cpu/cpu3/cpufreq/scaling_governor "interactive"
+    write /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor "ondemand"
+    write /sys/devices/system/cpu/cpu1/cpufreq/scaling_governor "ondemand"
+    write /sys/devices/system/cpu/cpu2/cpufreq/scaling_governor "ondemand"
+    write /sys/devices/system/cpu/cpu3/cpufreq/scaling_governor "ondemand"
+    write /sys/devices/system/cpu/cpufreq/ondemand/up_threshold 90
+    write /sys/devices/system/cpu/cpufreq/ondemand/sampling_rate 50000
+    write /sys/devices/system/cpu/cpufreq/ondemand/io_is_busy 1
+    write /sys/devices/system/cpu/cpufreq/ondemand/sampling_down_factor 4
     write /sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq 384000
     write /sys/devices/system/cpu/cpu1/cpufreq/scaling_min_freq 384000
     write /sys/devices/system/cpu/cpu2/cpufreq/scaling_min_freq 384000
     write /sys/devices/system/cpu/cpu3/cpufreq/scaling_min_freq 384000
-    write /sys/devices/system/cpu/cpu1/online 1
-    write /sys/devices/system/cpu/cpu2/online 1
-    write /sys/devices/system/cpu/cpu3/online 1
-    write /dev/cpuctl/apps/cpu.notify_on_migrate 1
 
-    # Chown cpu online files as needed for the Settings app
-    chown system system /sys/devices/system/cpu/cpu1/online
-    chown system system /sys/devices/system/cpu/cpu2/online
-    chown system system /sys/devices/system/cpu/cpu3/online
-
-    # Hardware tunables
-    chown root system /sys/class/timed_output/vibrator/amp
-    chown root system /sys/devices/platform/kcal_ctrl.0/kcal
-    chown root system /sys/devices/platform/kcal_ctrl.0/kcal_ctrl
-    chown root system /sys/devices/platform/mipi_lgit.1537/kgamma_r
-    chown root system /sys/devices/platform/mipi_lgit.1537/kgamma_g
-    chown root system /sys/devices/platform/mipi_lgit.1537/kgamma_b
-    chown root system /sys/devices/platform/mipi_lgit.1537/kgamma_apply
-    chmod 0664 /sys/class/timed_output/vibrator/amp
-    chmod 0664 /sys/devices/platform/kcal_ctrl.0/kcal
-    chmod 0664 /sys/devices/platform/kcal_ctrl.0/kcal_ctrl
-    chmod 0664 /sys/devices/platform/mipi_lgit.1537/kgamma_r
-    chmod 0664 /sys/devices/platform/mipi_lgit.1537/kgamma_g
-    chmod 0664 /sys/devices/platform/mipi_lgit.1537/kgamma_b
-    chmod 0664 /sys/devices/platform/mipi_lgit.1537/kgamma_apply
-    restorecon /sys/class/timed_output/vibrator/amp
-    restorecon /sys/devices/platform/kcal_ctrl.0/kcal
-    restorecon /sys/devices/platform/kcal_ctrl.0/kcal_ctrl
-    restorecon /sys/devices/platform/mipi_lgit.1537/kgamma_r
-    restorecon /sys/devices/platform/mipi_lgit.1537/kgamma_g
-    restorecon /sys/devices/platform/mipi_lgit.1537/kgamma_b
-    restorecon /sys/devices/platform/mipi_lgit.1537/kgamma_apply
-
-    #Modem logging collection
-    mkdir /data/diag_logs 0777 system system
-    chmod 666 /dev/diag
+    # disable diag port
+    rm /dev/diag
 
 on charger
-    trigger charger-fs
     # Enable Power modes and set the CPU Freq Sampling rates
     write /sys/module/rpm_resources/enable_low_power/L2_cache 1
     write /sys/module/rpm_resources/enable_low_power/pxo 1
@@ -310,10 +256,11 @@ service rmt_storage /system/bin/rmt_storage
     user root
     group system
 
-service hciattach /system/bin/init.geehrc.bt.sh
+service hciattach /system/bin/sh /system/etc/init.mako.bt.sh
     class late_start
     user bluetooth
     group qcom_oncrpc bluetooth net_bt_admin system
+    seclabel u:r:bluetooth_loader:s0
     disabled
     oneshot
 
@@ -409,7 +356,7 @@ service iprenew_bt-pan /system/bin/dhcpcd -n
 
 on property:ro.data.large_tcp_window_size=true
     # Adjust socket buffer to enlarge TCP receive window for high bandwidth (e.g. DO-RevB)
-    write /proc/sys/net/ipv4/tcp_adv_win_scale  2
+    write /proc/sys/net/ipv4/tcp_adv_win_scale  1
 
 service charger /sbin/healthd -c
     class charger
@@ -420,15 +367,21 @@ service thermald /system/bin/thermald
     class main
     group radio system
 
+service mpdecision /system/bin/mpdecision --no_sleep --avg_comp
+    class main
+    user root
+    group root system
+
 service qcamerasvr /system/bin/mm-qcamera-daemon
     class late_start
     user camera
     group camera system inet input
 
-service wcnss_init /system/bin/init.geehrc.wifi.sh
+service wcnss_init /system/bin/sh /system/etc/init.mako.wifi.sh
     class late_start
     user system
     group system wifi
+    seclabel u:r:conn_init:s0
     oneshot
 
 service bdAddrLoader /system/bin/bdAddrLoader -f /persist/bluetooth/.bdaddr -h -x
@@ -454,23 +407,5 @@ service diag_mdlog /system/bin/diag_mdlog -s 100
     class late_start
     disabled
 
-service fetch-swv /system/bin/fetch-swv
-    class late_start
-    oneshot
-
 # on property:gsm.sim.state=READY
 #    start diag_mdlog
-
-# inform hdmi driver that boot completed
-on property:dev.bootcomplete=1
-    write /sys/devices/virtual/graphics/fb1/hdmi_boot_completed 1
-
-# external block api
-on property:sys.hdmi.block=block
-    write /sys/devices/virtual/graphics/fb1/hdmi_external_block block
-
-on property:sys.hdmi.block=unblock
-    write /sys/devices/virtual/graphics/fb1/hdmi_external_block unblock
-
-on property:sys.hdmi.block=internal_block
-    write /sys/devices/virtual/graphics/fb1/hdmi_external_block internal_block
